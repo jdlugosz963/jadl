@@ -16,6 +16,7 @@ typedef enum _LispType {
 	LISP_TYPE_NIL,
 	LISP_TYPE_TRUE,
 	LISP_TYPE_FALSE,
+	LISP_TYPE_FUNC,
 	LISP_TYPE_ERROR
 } LispType;
 	
@@ -39,7 +40,7 @@ typedef struct _LispObject {
 		char *error;
 		long long *number_natural;
 		double *number_float;
-		struct _LispObject (*function)(struct _LispObject*);
+		struct _LispObject *(*func)(struct _LispObject*);
 		List *list;
 		void *ptr;
 	} value;
@@ -59,7 +60,31 @@ LISP_OBJECT *lisp_object_make_error(char *str);
 LISP_OBJECT *lisp_object_make_nil();
 LISP_OBJECT *lisp_object_make_true();
 LISP_OBJECT *lisp_object_make_false();
+LISP_OBJECT *lisp_object_make_func(LISP_OBJECT *(*func)(LISP_OBJECT*));
 
 int lisp_object_print(LISP_OBJECT *obj, int indent);
+
+int lisp_object_cmp_types(LISP_OBJECT *a, LISP_OBJECT *b);
+int lisp_object_cmp(LISP_OBJECT *a, LISP_OBJECT *b);
+int lisp_object_cmp_symbol(LISP_OBJECT *a, LISP_OBJECT *b);
+int lisp_object_cmp_numbers(LISP_OBJECT *a, LISP_OBJECT *b);
+int lisp_object_cmp_string(LISP_OBJECT *a, LISP_OBJECT *b);
+
+typedef struct _HashMap
+{
+	char *key;
+	LISP_OBJECT *value;
+	struct _HashMap *prev;
+	struct _HashMap *next;
+
+} HashMap;
+
+HashMap *hash_map_make(char *key, LISP_OBJECT *value);
+HashMap *hash_map_push(HashMap *hash_map, char *key, LISP_OBJECT *value);
+HashMap *hash_map_reverse(HashMap *hash_map);
+HashMap *hash_map_find(HashMap *hash_map, char* key);
+HashMap *hash_map_delete(HashMap *hash_map, char* key);
+void hash_map_free(HashMap *hash_map);
+void hash_map_print(HashMap *hash_map);
 
 #endif

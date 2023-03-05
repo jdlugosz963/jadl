@@ -161,14 +161,3 @@ LISP_OBJECT *parser_make_nil(Token **token)
 	return lisp_obj;
 }
 
-int main()
-{
-	char *test = "(display (string-append \"4*3+2=\" (number->string (+ (* 4 3) 1))))";
-
-
-	LISP_OBJECT *obj = NULL;
-
-	obj = parser_parse_str(test);
-	lisp_object_print(obj, 0);
-	lisp_object_free(obj);
-}

@@ -1,6 +1,7 @@
 #include "types.h"
 #include "memory.h"
 #include <stdio.h>
+#include <string.h>
 
 
 List *list_make(void *ptr)
@@ -174,6 +175,14 @@ LISP_OBJECT *lisp_object_make_false()
 	return lisp_obj;
 }
 
+LISP_OBJECT *lisp_object_make_func(LISP_OBJECT *(*func)(LISP_OBJECT*))
+{
+	LISP_OBJECT *lisp_obj = lisp_object_make();
+	lisp_obj->type = LISP_TYPE_FUNC;
+	lisp_obj->value.func = func;
+	return lisp_obj;
+}
+
 int lisp_object_print(LISP_OBJECT *obj, int indent)
 {
 	int count = 0;
@@ -229,4 +238,219 @@ int lisp_object_print(LISP_OBJECT *obj, int indent)
 		break;
 	}
 	return count;
+}
+
+int lisp_object_cmp_types(LISP_OBJECT *a, LISP_OBJECT *b)
+{
+	if(a==NULL && b==NULL)
+		return 1;
+	else if(a==NULL || b==NULL)
+		return 0;
+	else if(a->type != b->type)
+		return 0;
+	else if(a->type == b->type)
+		return 1;
+	return 0;
+}
+
+int lisp_object_cmp(LISP_OBJECT *a, LISP_OBJECT *b)
+{
+	int is_same_type = lisp_object_cmp_types(a, b);
+	if(!is_same_type)
+		return 0;
+
+	switch(a->type)
+	{
+	case LISP_TYPE_LIST:
+		break;
+	case LISP_TYPE_NUMBER:
+		return lisp_object_cmp_numbers(a, b);
+		break;
+	case LISP_TYPE_STRING:
+		lisp_object_cmp_string(a, b);
+		break;
+	case LISP_TYPE_SYMBOL:
+		lisp_object_cmp_symbol(a, b);
+		break;
+	case LISP_TYPE_NIL:
+	case LISP_TYPE_TRUE:
+	case LISP_TYPE_FALSE:
+	case LISP_TYPE_ERROR:
+		return 1;
+		break;
+	}
+}
+
+int lisp_object_cmp_numbers(LISP_OBJECT *a, LISP_OBJECT *b) // TODO: make it works 
+{
+	int is_same_type= lisp_object_cmp_types(a, b);
+	if(!is_same_type && a->type == LISP_TYPE_NUMBER)
+		return 0;
+
+	if(a->is_decimal_point && b->is_decimal_point)
+		return *a->value.number_float == *b->value.number_float;
+	else if(a->is_decimal_point && !b->is_decimal_point)
+		return *a->value.number_float == *(double *)b->value.number_natural;
+	else if(!a->is_decimal_point && b->is_decimal_point)
+		return *(double *)a->value.number_natural == *b->value.number_float;
+	else
+		return *a->value.number_natural == *b->value.number_natural;
+}
+
+int lisp_object_cmp_symbol(LISP_OBJECT *a, LISP_OBJECT *b)
+{
+	int is_same_type= lisp_object_cmp_types(a, b);
+	if(!is_same_type && a->type == LISP_TYPE_SYMBOL)
+		return 0;
+
+	return strcmp(a->value.symbol, b->value.symbol) == 0;
+}
+
+int lisp_object_cmp_string(LISP_OBJECT *a, LISP_OBJECT *b)
+{
+	int is_same_type= lisp_object_cmp_types(a, b);
+	if(!is_same_type && a->type == LISP_TYPE_STRING)
+		return 0;
+
+	return strcmp(a->value.string, b->value.string) == 0;
+}
+
+HashMap *hash_map_make(char *key, LISP_OBJECT *value)
+{
+	return hash_map_push(NULL, key, value);
+}
+
+HashMap *hash_map_push(HashMap *hash_map, char *key, LISP_OBJECT *value)
+{
+	HashMap *is_exist = hash_map_find(hash_map, key);
+
+	if(is_exist != NULL)
+		return NULL;
+
+	HashMap *new_hash_map = jadl_malloc(sizeof(HashMap));
+
+	new_hash_map->key = jadl_malloc(sizeof(char) * strlen(key));;
+	strcpy(new_hash_map->key, key);
+
+	new_hash_map->value = value;
+	new_hash_map->prev = NULL;
+
+	if(hash_map != NULL)
+		hash_map->prev = new_hash_map;
+	new_hash_map->next = hash_map;
+
+	return new_hash_map;
+}
+
+HashMap *hash_map_reverse(HashMap *hash_map)
+{
+	HashMap *current = hash_map;
+	HashMap *next = NULL;
+	HashMap *new_hash_map = NULL;
+	while (current) {
+		next = current->next;
+
+		current->next = new_hash_map;
+		new_hash_map = current;
+
+		current = next;
+	}
+
+	return new_hash_map;
+}
+
+
+void hash_map_free(HashMap *hash_map)
+{
+	HashMap *next = NULL;
+
+	while (hash_map)
+	{
+		next = hash_map->next;
+
+		jadl_free(hash_map->key);
+		lisp_object_free(hash_map->value);
+		jadl_free(hash_map);
+
+		hash_map = next;
+	}
+}
+
+HashMap *hash_map_find(HashMap *hash_map, char* key)
+{
+	if (hash_map == NULL)
+		return NULL;
+
+	while (hash_map)
+	{
+		if(strcmp(hash_map->key, key) == 0)
+			return hash_map;
+
+		hash_map = hash_map->next;
+	}
+
+	return NULL;
+}
+
+HashMap *hash_map_delete(HashMap *hash_map, char* key)
+{
+	HashMap *hash_map_to_free = hash_map_find(hash_map, key);
+
+	if(hash_map_to_free == NULL)
+		return hash_map;
+
+	HashMap *new_hash_map = NULL;
+
+	if(hash_map_to_free->prev == NULL)
+	{
+		new_hash_map = hash_map_to_free->next;
+		new_hash_map->prev = NULL;
+	} else
+	{
+		new_hash_map = hash_map_to_free->prev;
+		new_hash_map->next=hash_map_to_free->next;
+		if(new_hash_map->next)
+			new_hash_map->next->prev = new_hash_map;
+	}
+
+	HashMap *prev = new_hash_map->prev;
+	while(prev)
+	{
+		new_hash_map = prev;
+		prev = prev->prev;
+	}
+
+	hash_map_to_free->next = NULL;
+	hash_map_free(hash_map_to_free);
+
+	return new_hash_map;
+}
+
+
+void hash_map_print(HashMap *hash_map)
+{
+	while (hash_map)
+	{
+		printf("-------------\n");
+		printf("HashMap->key = %s\n", hash_map->key);
+		printf("HashMap->value: \n");
+		lisp_object_print(hash_map->value, 0);
+
+		hash_map = hash_map->next;
+	}
+
+	printf("-------------\n");
+}
+
+HashMap *hash_last(HashMap *hash_map)
+{
+	HashMap *next = NULL;
+	while (hash_map)
+	{
+		next = hash_map->next;
+		if(!next)
+			return hash_map;
+		hash_map = next;
+	}
+	return NULL;
 }
